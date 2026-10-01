@@ -1,0 +1,285 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<title>ROADLINE '91 – render tests</title>
+<style>
+body { background: #222; color: #ddd; font: 14px monospace; }
+canvas { image-rendering: pixelated; width: 320px; height: 240px; margin-right: 8px; background: #000; }
+.pass { color: #6d6; } .fail { color: #f66; }
+section { margin-bottom: 16px; }
+</style>
+</head>
+<body>
+<h1>Render tests</h1>
+<p>Left to right: result, golden, differences. Allowed difference of pixels and of the ramp histogram: <span id="limit"></span>%.</p>
+<div id="out"></div>
+<canvas id="gl" hidden></canvas>
+<script type="module">
+// Render tests: draws reference scenes into the index buffer, reads it back and compares with
+// tools/golden/*.bin (raw indices, 320x200, row 0 = bottom).
+import { CONFIG } from '../src/config.js';
+import { createContext } from '../src/gfx/gl.js';
+import { Renderer } from '../src/gfx/renderer.js';
+import { RAMP, buildBasePalette } from '../src/gfx/palette.js';
+import { mat4Perspective, mat4LookAt, mat4Multiply, mat4FromYawPitch } from '../src/engine/math3d.js';
+import { buildModel } from '../src/models/loader.js';
+import { CUBE, PYRAMID, GROUND } from '../src/models/primitives.js';
+import { VEKTOR_GT } from '../src/models/vektorGt.js';
+import { createWorld, roadCamera, drawWorld } from '../src/world/world.js';
+import { TRACK } from '../src/data/track-main.js';
+import { createRaceScene } from '../src/state/race.js';
+
+const W = CONFIG.render.width, H = CONFIG.render.height;
+const LIMIT = CONFIG.renderTest.maxDiffRatio;
+const renderer = new Renderer(createContext(document.getElementById('gl')));
+const mesh = Object.fromEntries([CUBE, PYRAMID, GROUND, VEKTOR_GT].map((def) => [def.name, renderer.addMesh(buildModel(def))]));
+const proj = mat4Perspective(new Float32Array(16), (CONFIG.render.fovDeg * Math.PI) / 180,
+  CONFIG.render.displayAspect, CONFIG.render.near, CONFIG.render.far);
+const model = new Float32Array(16);
+// One world per time of day; day and night come with a race scene (car, cockpit, headlights).
+const races = {
+  day: createRaceScene(renderer, { autoGearbox: true, time: 'day' }),
+  night: createRaceScene(renderer, { autoGearbox: true, time: 'night' }),
+};
+const worlds = { day: races.day.world, night: races.night.world, sunset: createWorld(renderer, TRACK, { time: 'sunset' }) };
+const idleInput = { state: { throttle: 0, brake: 0, steer: 0, lookBack: false }, pressed: {} };
+
+// Each scene: camera eye and target, list of [mesh, yaw, pitch, x, y, z, body ramp].
+const SCENES = [
+  { name: 'cube', eye: [0, 1.5, 4], target: [0, 0, 0], items: [['cube', 0.6, 0.4, 0, 0, 0, 0]] },
+  { name: 'pyramid', eye: [0, 2, 4], target: [0, 0.6, 0], items: [['pyramid', 0.5, 0, 0, 0, 0, 0]] },
+  { name: 'car', eye: [2.4, 1.3, -3.2], target: [0, 0.2, 0], items: [['vektorGt', 0, 0, 0, 0, 0, RAMP.paint1]] },
+  { name: 'carRear', eye: [-1.6, 1.7, 4.2], target: [0, 0.3, 0], items: [['vektorGt', 0, 0, 0, 0, 0, RAMP.paint2]] },
+  { name: 'nearclip', eye: [0.4, 0.5, -2.4], target: [0, 0.2, 2], items: [['vektorGt', 0, 0, 0, 0, 0, RAMP.paint2]] },
+  {
+    name: 'scene', eye: [0, 3, 9], target: [0, 0.5, 0], items: [
+      ['ground', 0, 0, 0, 0, 0, 0], ['cube', 0.6, 0.4, -4, 1.8, 0, 0], ['pyramid', 0.5, 0, 4, 0, 0, 0],
+      ['vektorGt', 0.8, 0, 0, 0.3, 1, RAMP.paint3], ['vektorGt', -2.2, 0, 1, 0.3, -5, RAMP.paint4],
+    ],
+  },
+  // World scenes: camera on the main road centerline `at` m into section `sec`, optionally
+  // pitched up by `lift` meters.
+  { name: 'road', sec: 1, at: 60 },
+  { name: 'curve', sec: 2, at: 800 },
+  { name: 'climb', sec: 2, at: 300 },
+  { name: 'bridge', sec: 1, at: 1450 },
+  { name: 'fog', sec: 5, at: 4200 },
+  { name: 'sky', sec: 1, at: 60, lift: 5 },
+  { name: 'downhill', sec: 2, at: 3900 },
+  { name: 'tunnel', sec: 2, at: 2350 },
+  { name: 'forest', sec: 3, at: 400 },
+  { name: 'suburbs', sec: 4, at: 1000 },
+  { name: 'gasStation', sec: 1, at: 6380 },
+  { name: 'desert', sec: 6, at: 400 },
+  { name: 'fork', sec: 3, at: 900 },
+  { name: 'seaCliff', sec: 1, at: 5550 },
+  { name: 'lighthouse', sec: 1, at: 5600 },
+  { name: 'seaCliffSunset', sec: 1, at: 5300, time: 'sunset' },
+  { name: 'snowClimb', sec: 2, at: 400 },
+  { name: 'passLeg', sec: 2, at: 1000 },
+  { name: 'passHairpin', sec: 2, at: 1300 },
+  { name: 'passAerial', sec: 2, at: 700, aerial: 160 },
+  { name: 'snowSummit', sec: 2, at: 3000 },
+  { name: 'canyonRoad', sec: 2, at: 4300 },
+  { name: 'canyonExit', sec: 2, at: 5150 },
+  { name: 'redwoods', sec: 3, at: 2700 },
+  { name: 'lakeRoad', sec: 5, at: 900 },
+  { name: 'lakeSunset', sec: 5, at: 1300, time: 'sunset' },
+  { name: 'tunnelHill', sec: 1, at: 3300 },
+  { name: 'tunnelInside', sec: 1, at: 3500 },
+  { name: 'mesaTunnel', sec: 6, at: 1350 },
+  { name: 'gorgeBridge', sec: 2, at: 3480 },
+  { name: 'riverBridge', sec: 3, at: 2100 },
+  { name: 'restArea', sec: 1, at: 2170 },
+  { name: 'highwayRest', sec: 5, at: 2880 },
+  { name: 'rejoin', sec: 3, at: 1900 },
+  { name: 'townFork', sec: 4, at: 1290 },
+  { name: 'townRejoin', sec: 4, at: 3080 },
+  { name: 'sunset', sec: 1, at: 60, time: 'sunset' },
+  { name: 'sunsetForest', sec: 3, at: 400, time: 'sunset' },
+  { name: 'nightRoad', sec: 4, at: 1000, time: 'night' },
+  // Race scenes: the car standing `at` m into section `sec` (of road `road`, main by default);
+  // overlay composited on top.
+  { name: 'cockpit', sec: 2, at: 800, chase: false },
+  { name: 'chase', sec: 2, at: 800, chase: true },
+  { name: 'gravel', road: 1, at: 150, chase: true },
+  { name: 'gravelCockpit', road: 1, at: 40, chase: false },
+  { name: 'gravelRejoin', road: 1, at: 810, chase: true },
+  { name: 'bridgeChase', sec: 1, at: 1400, chase: true, turn: 0.9 },
+  { name: 'parkingChase', sec: 5, at: 2925, chase: true, turn: 1.3 },
+  { name: 'forkChase', sec: 3, at: 985, chase: true },
+  // High above the forks, looking down along the road: terrain strips must meet without holes.
+  { name: 'forkAerial', sec: 3, at: 850, aerial: 120 },
+  { name: 'townAerial', sec: 4, at: 1200, aerial: 120 },
+  { name: 'station', sec: 1, at: 6400, chase: false, station: true },
+  { name: 'nightCockpit', sec: 3, at: 400, chase: false, time: 'night' },
+  { name: 'nightChase', sec: 4, at: 1030, chase: true, time: 'night' },
+  { name: 'crash', sec: 2, at: 800, chase: false, crash: true },
+  // Police: parked patrol car with the detector going off; a chase seen through the rear window;
+  // the ticket screen.
+  { name: 'policeParked', sec: 1, at: 1455, chase: false, steps: 2, resetPolice: true },
+  { name: 'policeChase', sec: 1, at: 1520, chase: false, steps: 2, lookBack: true, alarm: true, speed: 30, resetPolice: true },
+  { name: 'ticket', sec: 2, at: 800, chase: false, ticket: [142, 90], printSteps: 150 },
+  { name: 'ticketPrinting', sec: 2, at: 800, chase: false, ticket: [118, 90], printSteps: 40 },
+  { name: 'nightPolice', sec: 1, at: 1520, chase: false, steps: 2, lookBack: true, alarm: true, speed: 30, resetPolice: true, time: 'night' },
+  { name: 'nightPoliceChase', sec: 1, at: 1515, chase: true, steps: 40, alarm: true, speed: 12, resetPolice: true, time: 'night' },
+  // Night in the forest (no street lamps): oncoming and leading traffic light the road with their headlights.
+  { name: 'passChase', sec: 2, at: 1500, chase: true, turn: 1.1 },
+  { name: 'passCockpit', sec: 2, at: 2050, chase: false, turn: -0.7 },
+  { name: 'canyonChase', sec: 2, at: 4600, chase: true },
+  { name: 'seaCliffChase', sec: 1, at: 5450, chase: true, turn: 0.8 },
+  { name: 'lighthouseNight', sec: 1, at: 5560, chase: false, time: 'night', steps: 30 },
+  { name: 'lakeChase', sec: 5, at: 1100, chase: true, turn: -0.5 },
+  { name: 'snowNight', sec: 2, at: 1500, chase: false, time: 'night' },
+  { name: 'nightTraffic', sec: 3, at: 600, chase: true, time: 'night', steps: 900 },
+  // Standing on the highway for 20 s while traffic passes in both directions.
+  { name: 'traffic', sec: 5, at: 3600, chase: true, steps: 1200 },
+  // Car turned towards the houses beside the road: their walls are lit, the ground behind is not.
+  { name: 'nightHouse', sec: 4, at: 950, chase: true, time: 'night', turn: 1.1 },
+  { name: 'nightHouseCockpit', sec: 4, at: 950, chase: false, time: 'night', turn: 1.1 },
+];
+
+function renderScene(scene) {
+  const out = new Uint8Array(W * H);
+  if (scene.chase !== undefined) {
+    const race = races[scene.time || 'day'];
+    if (scene.resetPolice) race.police.reset();
+    const sections = race.world.path.sections;
+    race.place(scene.road ? scene.at : sections[scene.sec - 1].start + scene.at, scene.road || 0);
+    race.car.heading += scene.turn || 0;
+    if (scene.speed) race.car.vLong = scene.speed;
+    const input = { state: { ...idleInput.state, throttle: scene.throttle || 0, lookBack: !!scene.lookBack }, pressed: {} };
+    for (let i = 0; i < (scene.steps || 1); i++) race.update(1 / 60, input);
+    if (scene.crash) race.crash();
+    if (scene.station) race.arrive();
+    if (scene.ticket) {
+      race.ticket(...scene.ticket);
+      for (let i = 0; i < (scene.printSteps || 0); i++) race.update(1 / 60, input);
+    }
+    if (scene.alarm) {
+      race.police.units[0].state = 'chase';
+      race.police.units[0].phase = 'wait';
+      race.update(1 / 60, input);
+    }
+    race.setChase(scene.chase);
+    race.render();
+    renderer.readIndices(out);
+    renderer.overlay.fill(0);
+    race.drawOverlay(renderer.overlay);
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        const over = renderer.overlay[(H - 1 - y) * W + x];
+        if (over) out[y * W + x] = over;
+      }
+    }
+    return out;
+  }
+  if (scene.sec !== undefined) {
+    const eye = [0, 0, 0], target = [0, 0, 0];
+    const world = worlds[scene.time || 'day'];
+    world.lamp.on = false;
+    roadCamera(world, world.path.sections[scene.sec - 1].start + scene.at, eye, target);
+    if (scene.aerial) {
+      target[0] += (target[0] - eye[0]) * 20; target[2] += (target[2] - eye[2]) * 20;
+      eye[1] += scene.aerial;
+    }
+    target[1] += scene.lift || 0;
+    drawWorld(world, renderer, eye, target);
+    renderer.readIndices(out);
+    return out;
+  }
+  renderer.disableFog();
+  renderer.setLight(CONFIG.time.day.light);
+  renderer.night = false;
+  renderer.setLamp(false, 0, 0, 0, 0, 0, -1);
+    renderer.lightCount = 0;
+    renderer.carLampCount = 0;
+    renderer.beaconStrength = 0;
+  renderer.setPalette(basePalette, -1);
+  const view = mat4LookAt(new Float32Array(16), scene.eye, scene.target, [0, 1, 0]);
+  renderer.beginFrame(mat4Multiply(view, proj, view), scene.eye);
+  for (const [name, yaw, pitch, x, y, z, body] of scene.items) {
+    renderer.drawMesh(mesh[name], mat4FromYawPitch(model, yaw, pitch, x, y, z), body);
+  }
+  renderer.readIndices(out);
+  return out;
+}
+
+// Paints indices (or a diff mask) on a 2D canvas using the palette.
+function show(parent, pixel) {
+  const canvas = parent.appendChild(document.createElement('canvas'));
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext('2d'), img = ctx.createImageData(W, H);
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) img.data.set(pixel((H - 1 - y) * W + x), (y * W + x) * 4);
+  }
+  ctx.putImageData(img, 0, 0);
+}
+
+function rampHistogram(buf) {
+  const hist = new Array(16).fill(0);
+  for (const index of buf) hist[index >> 4]++;
+  return hist;
+}
+
+function compare(result, golden) {
+  const problems = [];
+  if (result.includes(0)) problems.push('pixels with index 0');
+  if (!golden) return { problems: [...problems, 'no golden'], diff: 1 };
+  let diff = 0;
+  for (let i = 0; i < result.length; i++) if (result[i] !== golden[i]) diff++;
+  if (diff / result.length > LIMIT) problems.push('too many different pixels');
+  const a = rampHistogram(result), b = rampHistogram(golden);
+  if (a.some((n, ramp) => Math.abs(n - b[ramp]) / result.length > LIMIT)) problems.push('ramp histogram');
+  return { problems, diff: diff / result.length };
+}
+
+async function loadGolden(name) {
+  try {
+    const res = await fetch(`../tools/golden/${name}.bin`);
+    if (!res.ok) return null;
+    const data = new Uint8Array(await res.arrayBuffer());
+    return data.length === W * H ? data : null;
+  } catch {
+    return null;
+  }
+}
+
+document.getElementById('limit').textContent = LIMIT * 100;
+const basePalette = buildBasePalette();
+const results = [];
+for (const scene of SCENES) {
+  const result = renderScene(scene);
+  const palette = renderer.palette.slice();
+  const pal = (index) => palette.subarray(index * 4, index * 4 + 4);
+  const golden = await loadGolden(scene.name);
+  const { problems, diff } = compare(result, golden);
+  const pass = problems.length === 0;
+  const section = document.getElementById('out').appendChild(document.createElement('section'));
+  const title = section.appendChild(document.createElement('div'));
+  title.className = pass ? 'pass' : 'fail';
+  title.textContent = `${pass ? 'PASS' : 'FAIL'} ${scene.name}: difference ${(diff * 100).toFixed(3)}% ${problems.join(', ')} `;
+  const save = title.appendChild(document.createElement('button'));
+  save.textContent = 'Save as golden';
+  save.onclick = () => {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([result]));
+    a.download = `${scene.name}.bin`;
+    a.click();
+  };
+  section.appendChild(document.createElement('br'));
+  show(section, (i) => pal(result[i]));
+  if (golden) {
+    show(section, (i) => pal(golden[i]));
+    show(section, (i) => (result[i] === golden[i] ? [0, 0, 0, 255] : [255, 0, 255, 255]));
+  }
+  results.push({ name: scene.name, pass, diff, problems, data: result });
+}
+// Exposed for automated runs.
+window.renderTestResults = results;
+</script>
+</body>
+</html>

@@ -1,0 +1,91 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
+<!-- Landing page of the GitHub Pages site: description, screenshots, link to the game (play.html). -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ROADLINE '91 – a palette-indexed polygon racer for the browser</title>
+<meta name="description" content="A browser racing game in the style of the early polygon racers of around 1990: 320×200, 256-color palette, flat shading, FM music. Pure JavaScript and WebGL2, no dependencies.">
+<style>
+:root { --bg: #14110f; --panel: #221d1a; --text: #e8dcc8; --dim: #a89880; --hot: #ff8a3d; --sky: #5aa0e6; }
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.55 ui-monospace, "DejaVu Sans Mono", Menlo, Consolas, monospace; }
+a { color: var(--hot); }
+header { text-align: center; padding: 48px 16px 24px; background: linear-gradient(#3a2a4a, #b0603a 70%, var(--bg)); }
+h1 { margin: 0; font-size: clamp(36px, 8vw, 72px); letter-spacing: 0.08em; color: #ffd27a; text-shadow: 4px 4px 0 #7a2a10; }
+.tag { color: #fff2dc; max-width: 760px; margin: 12px auto 28px; }
+.play { display: inline-block; padding: 14px 34px; background: var(--hot); color: #1a0f08; text-decoration: none; font-weight: bold; font-size: 22px; border: 3px solid #ffd27a; box-shadow: 6px 6px 0 #7a2a10; }
+.play:hover { background: #ffd27a; }
+.links { margin-top: 18px; color: var(--dim); }
+main { max-width: 1100px; margin: 0 auto; padding: 16px; }
+h2 { color: #ffd27a; border-bottom: 2px solid #3a302a; padding-bottom: 6px; margin-top: 40px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 14px; }
+figure { margin: 0; background: var(--panel); padding: 8px; }
+figure img { width: 100%; display: block; image-rendering: pixelated; }
+figcaption { color: var(--dim); font-size: 14px; padding-top: 6px; }
+table { border-collapse: collapse; width: 100%; }
+td, th { border-bottom: 1px solid #3a302a; padding: 6px 8px; text-align: left; vertical-align: top; }
+th { color: #ffd27a; }
+ul { padding-left: 22px; }
+footer { color: var(--dim); text-align: center; padding: 32px 16px 48px; font-size: 14px; }
+code { color: var(--sky); }
+</style>
+</head>
+<body>
+<header>
+  <h1>ROADLINE '91</h1>
+  <p class="tag">A point-to-point racing game in the style of the early polygon racers of around 1990 – flat-shaded polygons, a 320×200 picture where every pixel is an index into a 256-color palette, Bayer dithering and FM music. Pure JavaScript and WebGL2, no libraries, no external assets.</p>
+  <a class="play" href="play.html">▶ PLAY IN THE BROWSER</a>
+  <p class="links">Needs a browser with WebGL2 · keyboard, gamepad or touch · <a href="https://github.com/Noneawe/roadline91">source code on GitHub</a></p>
+</header>
+<main>
+  <h2>Screenshots</h2>
+  <div class="grid">
+    <figure><img src="screenshots/title.png" alt="Title screen with a color-cycled logo and a turning car"><figcaption>Title screen with palette color cycling</figcaption></figure>
+    <figure><img src="screenshots/setup.png" alt="Car and race setup screen"><figcaption>Four fictional cars, each with its own character</figcaption></figure>
+    <figure><img src="screenshots/coast-cockpit.png" alt="Cockpit view on the coast road"><figcaption>Cockpit with working gauges and a rear-view mirror</figcaption></figure>
+    <figure><img src="screenshots/sea-cliff-sunset.png" alt="Cliff road with a lighthouse at sunset"><figcaption>Sea cliff and lighthouse at sunset</figcaption></figure>
+    <figure><img src="screenshots/snow-pass.png" alt="Snowy mountain pass"><figcaption>Mountain pass with hairpins above a drop</figcaption></figure>
+    <figure><img src="screenshots/canyon-chase.png" alt="Red rock canyon"><figcaption>Winding red-rock canyon</figcaption></figure>
+    <figure><img src="screenshots/redwood-rain.png" alt="Redwood forest in the rain"><figcaption>Rain: wipers, drops, wet asphalt, less grip</figcaption></figure>
+    <figure><img src="screenshots/suburbs-night.png" alt="Suburbs at night with street lamps"><figcaption>Night: dithered headlight wedge and street lamps</figcaption></figure>
+    <figure><img src="screenshots/police-chase.png" alt="Police car overtaking on a bridge"><figcaption>Radar trap, chase and radar detector</figcaption></figure>
+    <figure><img src="screenshots/citation.png" alt="Dot-matrix printed traffic citation"><figcaption>A citation printed like a dot-matrix printout</figcaption></figure>
+    <figure><img src="screenshots/desert-fog.png" alt="Desert road in fog"><figcaption>Fog done with dithering, never smooth blending</figcaption></figure>
+    <figure><img src="screenshots/replay-top.png" alt="Replay with the top camera"><figcaption>Replay of the last minute with four cameras</figcaption></figure>
+  </div>
+
+  <h2>Features</h2>
+  <ul>
+    <li>About 40 km route from the coast over a snowy pass, through a canyon, redwoods, suburbs, a lake and the highway to the desert – six sections ending at gas stations, two branches including a gravel shortcut.</li>
+    <li>Four fictional cars: Vektor GT (all-rounder), Aurora MR (fastest, nervous), Breeze R (best in corners), Kestrel S (stable, good in the rain).</li>
+    <li>Arcade-sim physics: torque curves, five gears with automatic or manual shifting, a bicycle tyre model with slides you can catch.</li>
+    <li>Two-way traffic, an AI rival that stops at the stations too, police with radars, chases and citations – three stops end the race.</li>
+    <li>Day, sunset and night; rain and fog; outside cameras; a replay of the last 60 seconds.</li>
+    <li>Original FM-synthesis music and sound effects generated with the Web Audio API: rpm-driven engine, siren with Doppler shift.</li>
+    <li>Records, key remapping, volume settings, touch controls, 640×400 enhanced mode and a 15 FPS historical mode (F3).</li>
+  </ul>
+
+  <h2>Controls</h2>
+  <table>
+    <tr><th>Action</th><th>Keyboard</th><th>Gamepad</th></tr>
+    <tr><td>Throttle / brake</td><td>↑ / ↓ or W / S</td><td>RT / LT</td></tr>
+    <tr><td>Steer</td><td>← → or A D</td><td>Left stick, D-pad</td></tr>
+    <tr><td>Gear up / down (manual)</td><td>E / Q</td><td>RB / LB</td></tr>
+    <tr><td>Camera / look back</td><td>C / V</td><td>Y / R3</td></tr>
+    <tr><td>Replay / horn</td><td>R / H</td><td>Back / L3</td></tr>
+    <tr><td>Pause</td><td>Esc or P</td><td>Start</td></tr>
+    <tr><td>Mute</td><td>M</td><td></td></tr>
+  </table>
+  <p>Driving keys can be remapped in CONTROLS (title and pause menus). On phones on-screen buttons appear after the first touch.</p>
+
+  <h2>How it is made</h2>
+  <p>The world is rendered into an <code>R8UI</code> 320×200 texture that holds palette indices, not colors. Flat shading, fog and lighting are all quantized with a 4×4 Bayer matrix in index space; a final pass looks the indices up in a 256-entry palette texture and scales the picture to a 4:3 letterbox with nearest-neighbour sampling. Models, sounds, music and the font are defined in code – there are no image or audio files. The whole game builds into a single HTML file of about 420 KB.</p>
+</main>
+<footer>
+  ROADLINE '91 is free software under the <a href="https://www.gnu.org/licenses/agpl-3.0.html">GNU AGPL v3.0 or later</a>.
+  <a href="https://github.com/Noneawe/roadline91">Source code</a>. All cars, places and music are fictional and original.
+</footer>
+</body>
+</html>
